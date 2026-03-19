@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-Show less
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>STEALTH V5 | COMMAND CENTER</title>
@@ -12,6 +11,7 @@ Show less
         /* ── Shell chrome ── */
         *, *::before, *::after { box-sizing: border-box; }
         html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f9f9f8; color: #1a1a1a; }
+
         /* Top nav bar */
         #nav-container {
             position: fixed; top: 0; left: 0; right: 0; z-index: 200;
@@ -33,8 +33,10 @@ Show less
         }
         .nav-btn:hover { color: #1a1a1a; background: #f0f0ee; }
         .nav-btn.active { color: #d97757; background: rgba(217,119,87,0.1); }
+
         /* Content */
         #view-container { padding: 24px 28px; margin-top: 48px; max-width: 1440px; margin-left: auto; margin-right: auto; padding-top: 72px; }
+
         /* Debug console */
         #debug-console {
             background: #111; color: #00cc44; padding: 8px 14px;
@@ -43,6 +45,7 @@ Show less
             border-top: 1px solid #222; z-index: 100; line-height: 1.6;
         }
         #debug-console span.ts { color: #555; margin-right: 6px; }
+
         /* ── Config modal ── */
         #config-modal {
             display: none; position: fixed; inset: 0;
@@ -71,6 +74,7 @@ Show less
     </style>
 </head>
 <body>
+
 <!-- ── Config modal ── -->
 <div id="config-modal">
     <div id="config-box">
@@ -85,6 +89,7 @@ Show less
         <div id="cfg-error"></div>
     </div>
 </div>
+
 <!-- ── Top nav ── -->
 <div id="nav-container">
     <span class="nav-logo">STEALTH_V5</span>
@@ -92,17 +97,22 @@ Show less
     <span id="sys-status">BOOTING...</span>
     <button onclick="resetConfig()" style="margin-left:8px; background:none; border:none; cursor:pointer; font-size:0.6rem; color:#bbb; font-family:inherit;">⚙ reconfigure</button>
 </div>
+
 <!-- ── Page content ── -->
 <div id="view-container"></div>
+
 <!-- ── Debug console ── -->
 <div id="debug-console"></div>
+
 <script>
 // ── Globals ────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'stealthv5_cfg_v2';
+
 // OWNER and REPO are fixed — only the PAT lives in localStorage
 window.OWNER = 'manujguptain';
 window.REPO  = 'sys-patch-4802-lib';
 window.TOKEN = localStorage.getItem(STORAGE_KEY) || '';
+
 // ── Debug logger ───────────────────────────────────────────────────────────
 window.log = function(msg) {
     const d = document.getElementById('debug-console');
@@ -110,6 +120,7 @@ window.log = function(msg) {
     d.innerHTML += `<br><span class="ts">[${ts}]</span> ${msg}`;
     d.scrollTop = d.scrollHeight;
 };
+
 // ── GitHub raw fetch ───────────────────────────────────────────────────────
 // Uses Accept: vnd.github.v3.raw — response body IS the file, no base64.
 // isRaw=false (default) → JSON.parse the response
@@ -130,6 +141,7 @@ window.fetchGit = async function(path, isRaw = false) {
     }
 };
 window.fetchFromGit = window.fetchGit; // alias used by older components
+
 // ── Script executor ────────────────────────────────────────────────────────
 // innerHTML doesn't run <script> tags — we must replace each with a live element.
 function execScripts(container) {
@@ -139,16 +151,20 @@ function execScripts(container) {
         old.replaceWith(live);
     });
 }
+
 // ── Page loader ────────────────────────────────────────────────────────────
 let _activePage = null;
 window.loadPage = async function(slug) {
     if (_activePage === slug) return;
     _activePage = slug;
     log(`Navigating → ${slug}`);
+
     // Highlight active nav button
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.slug === slug));
+
     document.getElementById('view-container').innerHTML =
         '<div style="padding:60px; text-align:center; color:#bbb; font-size:0.8rem;">Loading...</div>';
+
     const html = await window.fetchGit(`views/${slug}.html`, true);
     if (!html) {
         document.getElementById('view-container').innerHTML =
@@ -157,16 +173,20 @@ window.loadPage = async function(slug) {
              </div></div>`;
         return;
     }
+
     document.getElementById('view-container').innerHTML = html;
     execScripts(document.getElementById('view-container'));
 };
+
 // ── Nav builder ────────────────────────────────────────────────────────────
 async function buildNav() {
     log('Loading navigation...');
     const css  = await window.fetchGit('views/theme.css', true);
     const menu = await window.fetchGit('views/menu.json');
+
     if (css)  document.getElementById('dynamic-styles').textContent = css;
     if (!menu) { log('!! Could not load menu.json'); return; }
+
     const menuEl = document.getElementById('dynamic-menu');
     menuEl.innerHTML = '';
     menu.forEach(m => {
@@ -180,45 +200,82 @@ async function buildNav() {
         });
         menuEl.appendChild(btn);
     });
+
     document.getElementById('sys-status').textContent = 'LIVE';
+
     const hash = window.location.hash.slice(1);
     const target = menu.find(m => m.slug === hash) ? hash : menu[0].slug;
     loadPage(target);
 }
+
 window.addEventListener('popstate', () => {
     const slug = window.location.hash.slice(1);
     if (slug) loadPage(slug);
 });
+
 // ── Config management ──────────────────────────────────────────────────────
 async function saveConfig() {
     const token = document.getElementById('cfg-token').value.trim();
     const errEl = document.getElementById('cfg-error');
     const btn   = document.getElementById('cfg-submit');
+
     if (!token) { errEl.textContent = 'Token is required.'; return; }
+
     btn.textContent = 'Verifying...';
     btn.disabled = true;
     errEl.textContent = '';
-    const testRes = await fetch(
-        `https://api.github.com/repos/${window.OWNER}/${window.REPO}/contents/views/menu.json`,
-        { headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3.raw' } }
-    );
-    if (!testRes.ok) {
-        errEl.textContent = `⚠ Access denied (HTTP ${testRes.status}). Check your token has "repo" read scope.`;
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        let testRes;
+        try {
+            testRes = await fetch(
+                `https://api.github.com/repos/${window.OWNER}/${window.REPO}/contents/views/menu.json`,
+                { headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3.raw' }, signal: controller.signal }
+            );
+        } finally {
+            clearTimeout(timeout);
+        }
+
+        if (!testRes.ok) {
+            if (testRes.status === 401) {
+                errEl.textContent = '⚠ Invalid token. Check the token is correct and not expired.';
+            } else if (testRes.status === 403) {
+                errEl.textContent = '⚠ Token lacks permission. Ensure it has Contents: Read access to the private repo.';
+            } else if (testRes.status === 404) {
+                errEl.textContent = '⚠ Repo not found. Check your token has access to manujguptain/sys-patch-4802-lib.';
+            } else {
+                errEl.textContent = `⚠ Access denied (HTTP ${testRes.status}). Check your token scope.`;
+            }
+            btn.textContent = 'UNLOCK VAULT';
+            btn.disabled = false;
+            return;
+        }
+
+        localStorage.setItem(STORAGE_KEY, token);
+        window.TOKEN = token;
+        document.getElementById('config-modal').style.display = 'none';
+        buildNav();
+    } catch(e) {
+        if (e.name === 'AbortError') {
+            errEl.textContent = '⚠ Request timed out. Check your network connection and try again.';
+        } else {
+            errEl.textContent = `⚠ Network error: ${e.message}`;
+        }
         btn.textContent = 'UNLOCK VAULT';
         btn.disabled = false;
-        return;
     }
-    localStorage.setItem(STORAGE_KEY, token);
-    window.TOKEN = token;
-    document.getElementById('config-modal').style.display = 'none';
-    buildNav();
 }
+
 function resetConfig() {
     if (confirm('Clear your access token?')) {
         localStorage.removeItem(STORAGE_KEY);
         location.reload();
     }
 }
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 log('Stealth V5 booting...');
 if (window.TOKEN) {
