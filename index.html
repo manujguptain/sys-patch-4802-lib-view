@@ -144,12 +144,21 @@ window.fetchFromGit = window.fetchGit; // alias used by older components
 
 // ── Script executor ────────────────────────────────────────────────────────
 // innerHTML doesn't run <script> tags — we must replace each with a live element.
-function execScripts(container) {
-    Array.from(container.querySelectorAll('script')).forEach(old => {
+async function execScripts(container) {
+    const scripts = Array.from(container.querySelectorAll('script'));
+    for (const old of scripts) {
         const live = document.createElement('script');
-        live.textContent = old.textContent;
+        const src  = old.getAttribute('src');
+        if (src) {
+            const repoPath = src.startsWith('components/') ? `views/${src}` : src;
+            const content = await window.fetchGit(repoPath, true);
+            if (content) live.textContent = content;
+            else log(`!! Could not load script: ${repoPath}`);
+        } else {
+            live.textContent = old.textContent;
+        }
         old.replaceWith(live);
-    });
+    }
 }
 
 // ── Page loader ────────────────────────────────────────────────────────────
@@ -175,7 +184,7 @@ window.loadPage = async function(slug) {
     }
 
     document.getElementById('view-container').innerHTML = html;
-    execScripts(document.getElementById('view-container'));
+    await execScripts(document.getElementById('view-container'));
 };
 
 // ── Nav builder ────────────────────────────────────────────────────────────
