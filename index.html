@@ -79,12 +79,9 @@
 <div id="config-modal">
     <div id="config-box">
         <h2>STEALTH_V5 — VAULT ACCESS</h2>
-        <p>Enter your GitHub Personal Access Token (PAT) with <b>repo</b> scope. Stored only in this browser's localStorage — never sent anywhere else.</p>
-        <p style="font-size:0.68rem; color:#bbb; margin-top:-10px;">
-            Create one at: github.com → Settings → Developer settings → Personal access tokens → Fine-grained → repo:read
-        </p>
-        <label class="cfg-label">Personal Access Token</label>
-        <input type="password" id="cfg-token" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
+        <p>Enter your 6-digit secure PIN to unlock the vault. This operates through a secure edge proxy.</p>
+        <label class="cfg-label">6-Digit Access PIN</label>
+        <input type="password" id="cfg-token" placeholder="------" maxlength="6" autocomplete="off" style="letter-spacing: 4px; text-align: center; font-size: 1.2rem;">
         <button id="cfg-submit" onclick="saveConfig()">UNLOCK VAULT</button>
         <div id="cfg-error"></div>
     </div>
@@ -106,12 +103,13 @@
 
 <script>
 // ── Globals ────────────────────────────────────────────────────────────────
-const STORAGE_KEY = 'stealthv5_cfg_v2';
+const STORAGE_KEY = 'stealthv5_pin_v3';
 
-// OWNER and REPO are fixed — only the PAT lives in localStorage
+// OWNER and REPO are fixed
 window.OWNER = 'manujguptain';
 window.REPO  = 'sys-patch-4802-lib';
 window.TOKEN = localStorage.getItem(STORAGE_KEY) || '';
+window.PROXY_URL = 'https://sys-patch-4802-lib-stealth-proxy.manujg.workers.dev';
 
 // ── Debug logger ───────────────────────────────────────────────────────────
 window.log = function(msg) {
@@ -121,17 +119,17 @@ window.log = function(msg) {
     d.scrollTop = d.scrollHeight;
 };
 
-// ── GitHub raw fetch ───────────────────────────────────────────────────────
+// ── GitHub raw fetch via Proxy ─────────────────────────────────────────────
 // Uses Accept: vnd.github.v3.raw — response body IS the file, no base64.
 // isRaw=false (default) → JSON.parse the response
 // isRaw=true  → return raw string (for HTML/CSS/text files)
 window.fetchGit = async function(path, isRaw = false) {
-    if (!window.TOKEN) { log(`!! No token — cannot fetch ${path}`); return null; }
+    if (!window.TOKEN) { log(`!! No PIN — cannot fetch ${path}`); return null; }
     const cleanPath = path.split('?')[0];
     try {
         const res = await fetch(
-            `https://api.github.com/repos/${window.OWNER}/${window.REPO}/contents/${cleanPath}`,
-            { headers: { 'Authorization': `token ${window.TOKEN}`, 'Accept': 'application/vnd.github.v3.raw' } }
+            `${window.PROXY_URL}/repos/${window.OWNER}/${window.REPO}/contents/${cleanPath}`,
+            { headers: { 'X-Sec-PIN': window.TOKEN, 'Accept': 'application/vnd.github.v3.raw' } }
         );
         if (!res.ok) { log(`!! Missing: ${cleanPath} (${res.status})`); return null; }
         return isRaw ? await res.text() : await res.json();
@@ -241,8 +239,8 @@ async function saveConfig() {
         let testRes;
         try {
             testRes = await fetch(
-                `https://api.github.com/repos/${window.OWNER}/${window.REPO}/contents/views/menu.json`,
-                { headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3.raw' }, signal: controller.signal }
+                `${window.PROXY_URL}/repos/${window.OWNER}/${window.REPO}/contents/views/menu.json`,
+                { headers: { 'X-Sec-PIN': token, 'Accept': 'application/vnd.github.v3.raw' }, signal: controller.signal }
             );
         } finally {
             clearTimeout(timeout);
@@ -250,13 +248,13 @@ async function saveConfig() {
 
         if (!testRes.ok) {
             if (testRes.status === 401) {
-                errEl.textContent = '⚠ Invalid token. Check the token is correct and not expired.';
+                errEl.textContent = '⚠ Invalid PIN.';
             } else if (testRes.status === 403) {
-                errEl.textContent = '⚠ Token lacks permission. Ensure it has Contents: Read access to the private repo.';
+                errEl.textContent = '⚠ Token in proxy lacks permission. Check the proxy GITHUB_PAT.';
             } else if (testRes.status === 404) {
-                errEl.textContent = '⚠ Repo not found. Check your token has access to manujguptain/sys-patch-4802-lib.';
+                errEl.textContent = '⚠ Repo not found. Check your proxy token has access to manujguptain/sys-patch-4802-lib.';
             } else {
-                errEl.textContent = `⚠ Access denied (HTTP ${testRes.status}). Check your token scope.`;
+                errEl.textContent = `⚠ Access denied (HTTP ${testRes.status}). Check your proxy config.`;
             }
             btn.textContent = 'UNLOCK VAULT';
             btn.disabled = false;
